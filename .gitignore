@@ -1,13 +1,57 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info
+sdist/
+.eggs/
 
 # Virtual environments
-.venv
-.env
+.venv/
+venv/
+env/
+ENV/
+
+# uv
 .python-version
+
+# Environment / secrets
+.env
+*.env.local
+*.env.*.local
+
+# Knowledge base (local vector DB, auto-generated)
+knowledge_base/
+
+# OS
+.DS_Store
 .DS_store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+logs/

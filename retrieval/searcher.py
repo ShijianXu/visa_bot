@@ -1,7 +1,7 @@
 """Web search module – targets official government and embassy sources."""
 
 import config
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 # Domains considered authoritative for visa info
 _OFFICIAL_DOMAINS = (
@@ -15,6 +15,7 @@ def search_topic(
     topic: str,
     nationality: str,
     destination: str,
+    residence: str = "",
     max_results: int | None = None,
 ) -> list[dict]:
     """Search for a specific topic within the context of a visa application.
@@ -24,9 +25,9 @@ def search_topic(
     """
     max_results = max_results or config.MAX_SEARCH_RESULTS
     queries = [
+        f"{topic} {destination} visa application {residence}".strip(),
+        f"{destination} embassy {residence} {topic}".strip(),
         f"{topic} {nationality} {destination} visa official",
-        f"{topic} {destination} visa application",
-        f"{destination} embassy {nationality} {topic}",
     ]
     return _run_search(queries, max_results)
 
@@ -34,6 +35,7 @@ def search_topic(
 def search_visa_info(
     nationality: str,
     destination: str,
+    residence: str = "",
     purpose: str = "tourism",
     max_results: int | None = None,
 ) -> list[dict]:
@@ -43,7 +45,7 @@ def search_visa_info(
     Each result: {url, title, snippet, query}
     """
     max_results = max_results or config.MAX_SEARCH_RESULTS
-    queries = _build_queries(nationality, destination, purpose)
+    queries = _build_queries(nationality, destination, residence, purpose)
     return _run_search(queries, max_results)
 
 
@@ -58,7 +60,7 @@ def _run_search(queries: list[str], max_results: int) -> list[dict]:
             if len(results) >= max_results * 2:
                 break
             try:
-                for hit in ddgs.text(query, max_results=4, safesearch="off"):
+                for hit in ddgs.text(query, max_results=4, safesearch="off", region="wt-wt"):
                     url = hit.get("href", "")
                     if url and url not in seen_urls:
                         seen_urls.add(url)
@@ -79,16 +81,27 @@ def _run_search(queries: list[str], max_results: int) -> list[dict]:
 
 
 
-def _build_queries(nationality: str, destination: str, purpose: str) -> list[str]:
+def _build_queries(
+    nationality: str, destination: str, residence: str, purpose: str
+) -> list[str]:
     nat = nationality.lower()
     dest = destination.lower()
-    return [
+    res = residence.lower()
+    queries = []
+    if res:
+        # Residence-first queries: find the embassy/consulate in the applicant's
+        # country of residence, which is the actual application point
+        queries += [
+            f"{dest} embassy {res} visa application {nat}",
+            f"apply {dest} visa from {res} {nat} citizens official",
+            f"{dest} consulate {res} {nat} passport visa requirements",
+        ]
+    queries += [
         f"visa requirements {nat} citizens {dest} official government",
-        f"{dest} visa {nat} passport official embassy application",
-        f"{dest} immigration {nat} entry requirements {purpose}",
-        f"site:.gov OR site:.gov.uk {nat} {dest} visa",
-        f"{dest} ministry foreign affairs visa {nat}",
+        f"{dest} visa {nat} entry requirements {purpose}",
+        f"{dest} immigration {nat} official",
     ]
+    return queries
 
 
 def _is_official(url: str) -> bool:

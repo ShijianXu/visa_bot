@@ -104,7 +104,9 @@ class VisaWorkflow:
         if not from_cache:
             # 2 ── Web search ──────────────────────────────────────────────────
             step("searching", "querying official sources …")
-            hits = search_visa_info(query.nationality, query.destination, query.purpose)
+            hits = search_visa_info(
+                query.nationality, query.destination, query.residence, query.purpose
+            )
 
             if not hits:
                 step("fallback", "no web results – using LLM knowledge")
@@ -225,7 +227,7 @@ class VisaWorkflow:
                 on_progress(name, detail)
 
         step("searching", f"searching: {question[:60]} …")
-        hits = search_topic(question, query.nationality, query.destination)
+        hits = search_topic(question, query.nationality, query.destination, query.residence)
 
         if not hits:
             return (
