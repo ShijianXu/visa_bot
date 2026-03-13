@@ -153,13 +153,16 @@ the sources. Never paraphrase them.
 _FALLBACK_TEMPLATE = """\
 Provide a general visa guidance overview for:
   • Nationality : {nationality}
+  • Residence   : {residence}
   • Destination : {destination}
   • Purpose     : {purpose}
   • Departure   : {departure_date}
 
+The applicant lives in {residence}, so focus on applying at the {destination} \
+embassy or consulate in {residence} — NOT on applying from {nationality}. \
 Use the same section structure as a standard visa guide. \
 State clearly that this is based on general knowledge and the user should \
-verify all details with the official embassy."""
+verify all details with the official embassy in {residence}."""
 
 _QUERY_GEN_SYSTEM = """\
 You are a search query strategist specialised in visa applications. \
@@ -543,6 +546,7 @@ class VisaWorkflow:
     ) -> dict:
         prompt = _FALLBACK_TEMPLATE.format(
             nationality=query.nationality,
+            residence=query.residence or "country of residence",
             destination=query.destination,
             purpose=query.purpose,
             departure_date=query.departure_date,

@@ -79,6 +79,7 @@ def search_visa_info(
     """Return a ranked list of search results about visa requirements.
 
     Official government/embassy URLs are sorted to the top.
+    Results mentioning the residence country are boosted above generic ones.
     Curated OFFICIAL_SOURCES for the destination are always prepended.
     extra_queries (LLM-generated) are prepended to rule-based queries so
     they are tried first and consume slots before generic fallbacks.
@@ -90,6 +91,15 @@ def search_visa_info(
     queries = list(extra_queries or []) + rule_queries
     search_hits = _run_search(queries, max_results, search_depth="advanced")
 
+    # Re-sort: official first, then residence-relevant, then generic.
+    # This ensures e.g. "Brazilian consulate in Bern" outranks
+    # "how to apply Brazil visa from China".
+    if residence:
+        search_hits.sort(
+            key=lambda r: (r["official"], _residence_score(r, residence, city)),
+            reverse=True,
+        )
+
     # Prepend curated official sources so they are always scraped first
     official_hits = _official_source_hits(destination)
     seen = {h["url"] for h in official_hits}
@@ -98,6 +108,20 @@ def search_visa_info(
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _residence_score(hit: dict, residence: str, city: str = "") -> int:
+    """Return 1 if this result appears to be about applying from the residence country/city."""
+    text = " ".join([
+        hit.get("url", ""),
+        hit.get("title", ""),
+        hit.get("snippet", ""),
+    ]).lower()
+    if city and city.lower() in text:
+        return 2
+    if residence.lower() in text:
+        return 1
+    return 0
+
 
 def _official_source_hits(destination: str) -> list[dict]:
     """Return pre-defined official source stubs for a destination."""
@@ -230,12 +254,23 @@ def _build_queries(
             f"{dest} embassy {res} visa application {nat}",
         ]
 
-    queries += [
-        f"visa requirements {nat} citizens {dest} official government",
-        f"{dest} visa {nat} entry requirements {purpose}",
-        f"{dest} immigration {nat} official",
-        f"{dest} visa application procedure {nat} documents upload submit",
-    ]
+    # Always anchor general queries to the residence country.
+    # Without this, searches for e.g. "Chinese → Brazil" return results about
+    # applying from China rather than from the country of residence.
+    if res:
+        queries += [
+            f"visa requirements {nat} citizens apply {dest} from {res}",
+            f"{dest} visa {nat} from {res} {purpose} official",
+            f"{dest} immigration apply from {res} {nat} official",
+            f"{dest} visa application procedure {nat} living in {res} documents",
+        ]
+    else:
+        queries += [
+            f"visa requirements {nat} citizens {dest} official government",
+            f"{dest} visa {nat} entry requirements {purpose}",
+            f"{dest} immigration {nat} official",
+            f"{dest} visa application procedure {nat} documents upload submit",
+        ]
 
     # Local-language query: official consulate pages are often only in the
     # destination country's language and won't appear in English searches.
