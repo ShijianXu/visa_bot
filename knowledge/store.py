@@ -13,6 +13,9 @@ import config
 from .models import VisaDocument
 
 _COLLECTION_NAME = "visa_docs"
+# Cosine distance threshold: 0 = identical, 2 = opposite.
+# Results above this value are too dissimilar to be useful.
+_DEFAULT_MAX_DISTANCE = 1.2
 
 
 class KnowledgeStore:
@@ -31,13 +34,47 @@ class KnowledgeStore:
     # ── Write ─────────────────────────────────────────────────────────────────
 
     def add_document(self, doc: VisaDocument) -> None:
-        """Upsert a document (de-duplicates by URL hash)."""
-        # Chunk long documents to stay within embedding limits
-        chunks = _chunk(doc.content, max_chars=1500)
+        """Upsert a document (de-duplicates by URL hash).
+
+        Evicts stale documents for the same country pair before indexing so
+        that outdated visa rules are replaced by the new data.
+        """
+        self.evict_stale(doc.origin_country, doc.destination_country)
+        chunks = _chunk(doc.content, max_chars=2500)
         ids = [f"{doc.doc_id}_{i}" for i in range(len(chunks))]
         metas = [doc.to_metadata() for _ in chunks]
 
         self._col.upsert(documents=chunks, metadatas=metas, ids=ids)
+
+    def evict_stale(
+        self,
+        origin: Optional[str] = None,
+        destination: Optional[str] = None,
+        hours: Optional[int] = None,
+    ) -> int:
+        """Delete documents older than *hours* for the given country pair.
+
+        Returns the number of deleted chunks.
+        """
+        ttl = hours or config.CACHE_TTL_HOURS
+        cutoff = datetime.utcnow() - timedelta(hours=ttl)
+        where = _build_where(origin, destination)
+        try:
+            kwargs: dict = {"where": where} if where else {}
+            res = self._col.get(**kwargs)
+            stale_ids = []
+            for doc_id, meta in zip(res.get("ids") or [], res.get("metadatas") or []):
+                try:
+                    ts = datetime.fromisoformat(meta["retrieval_time"])
+                    if ts <= cutoff:
+                        stale_ids.append(doc_id)
+                except (KeyError, ValueError):
+                    stale_ids.append(doc_id)  # malformed metadata → evict
+            if stale_ids:
+                self._col.delete(ids=stale_ids)
+            return len(stale_ids)
+        except Exception:
+            return 0
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
@@ -47,8 +84,13 @@ class KnowledgeStore:
         origin: Optional[str] = None,
         destination: Optional[str] = None,
         n_results: int = 5,
+        max_distance: float = _DEFAULT_MAX_DISTANCE,
     ) -> list[dict]:
-        """Semantic search; returns list of {content, metadata, distance}."""
+        """Semantic search; returns list of {content, metadata, distance}.
+
+        Results with cosine distance above *max_distance* are excluded so
+        low-relevance chunks don't pollute the LLM context.
+        """
         total = self._col.count()
         if total == 0:
             return []
@@ -66,15 +108,17 @@ class KnowledgeStore:
         except Exception:
             return []
 
+        distances = (res.get("distances") or [[]])[0]
         docs = []
         for i, text in enumerate(res["documents"][0]):
+            dist = distances[i] if i < len(distances) else 0.0
+            if dist > max_distance:
+                continue
             docs.append(
                 {
                     "content": text,
                     "metadata": res["metadatas"][0][i],
-                    "distance": (res.get("distances") or [[]])[0][i]
-                    if res.get("distances")
-                    else 0.0,
+                    "distance": dist,
                 }
             )
         return docs
@@ -108,20 +152,56 @@ class KnowledgeStore:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _chunk(text: str, max_chars: int = 1500) -> list[str]:
-    """Split text into overlapping chunks."""
+def _chunk(text: str, max_chars: int = 2500) -> list[str]:
+    """Split text into overlapping chunks, preferring paragraph boundaries.
+
+    Breaking at '\n\n' keeps semantically coherent paragraphs together.
+    Falls back to sentence boundaries, then hard character cuts.
+    """
     if len(text) <= max_chars:
         return [text]
-    chunks, start = [], 0
-    overlap = 200
+
+    overlap = 400
+    chunks: list[str] = []
+    start = 0
+
     while start < len(text):
         end = start + max_chars
-        chunks.append(text[start:end])
+        if end >= len(text):
+            tail = text[start:].strip()
+            if tail:
+                chunks.append(tail)
+            break
+
+        # 1. Prefer paragraph boundary in the last `overlap` chars of the window
+        boundary = text.rfind("\n\n", end - overlap, end)
+        if boundary != -1 and boundary > start:
+            chunks.append(text[start:boundary].strip())
+            start = boundary - overlap
+            continue
+
+        # 2. Sentence boundary in the last 300 chars
+        boundary = text.rfind(". ", end - 300, end)
+        if boundary != -1 and boundary > start:
+            chunks.append(text[start:boundary + 1].strip())
+            start = boundary + 1 - overlap
+            continue
+
+        # 3. Hard cut
+        chunks.append(text[start:end].strip())
         start = end - overlap
-    return chunks
+
+        if start < 0:
+            start = 0
+
+    return [c for c in chunks if c.strip()]
 
 
 def _build_where(origin: Optional[str], destination: Optional[str]) -> dict:
+    """Build a ChromaDB where-filter, normalizing to lowercase for consistency."""
+    origin = origin.strip().lower() if origin else None
+    destination = destination.strip().lower() if destination else None
+
     if origin and destination:
         return {
             "$and": [

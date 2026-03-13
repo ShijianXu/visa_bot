@@ -1,11 +1,14 @@
 """Groq LLM provider."""
 
+import time
 from typing import Iterator
 
-from groq import Groq
+from groq import Groq, APIError, RateLimitError
 
 import config
 from .base import LLMProvider
+
+_MAX_RETRIES = 3
 
 
 class GroqProvider(LLMProvider):
@@ -23,13 +26,27 @@ class GroqProvider(LLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return response.choices[0].message.content
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content
+            except RateLimitError as exc:
+                last_exc = exc
+                time.sleep(2 ** attempt)
+            except APIError as exc:
+                # Retry on 5xx server errors only
+                if getattr(exc, "status_code", 0) >= 500:
+                    last_exc = exc
+                    time.sleep(1)
+                else:
+                    raise
+        raise last_exc  # type: ignore[misc]
 
     def chat_stream(
         self,

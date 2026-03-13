@@ -181,13 +181,36 @@ class Display:
     # ── Results ───────────────────────────────────────────────────────────────
 
     def show_result(self, result: dict) -> None:
+        """Show a complete result (used for fallback guides generated synchronously)."""
         console.print()
         console.print(
             Rule(f"[bold {C_SUCCESS}] Visa Guide [/bold {C_SUCCESS}]", style=C_SUCCESS)
         )
         console.print()
         console.print(Markdown(result.get("guide", "_No guide generated._")))
+        self.show_result_meta(result)
 
+    # ── Streaming guide display ────────────────────────────────────────────────
+
+    def show_guide_header(self) -> None:
+        """Print the guide section header before streaming begins."""
+        console.print()
+        console.print(
+            Rule(f"[bold {C_SUCCESS}] Visa Guide [/bold {C_SUCCESS}]", style=C_SUCCESS)
+        )
+        console.print()
+
+    def stream_token(self, token: str) -> None:
+        """Write a single streamed token directly to the console."""
+        console.print(token, end="", markup=False)
+
+    def end_stream(self) -> None:
+        """Finish the streaming output with a blank line."""
+        console.print()
+        console.print()
+
+    def show_result_meta(self, result: dict) -> None:
+        """Show sources, scrape warnings, and retrieval metadata."""
         sources = result.get("sources") or []
         if sources:
             console.print()
@@ -216,6 +239,21 @@ class Display:
         if meta_parts:
             console.print()
             console.print("  " + "  ·  ".join(meta_parts))
+        console.print()
+
+    def show_scrape_warning(self, failed_urls: list[str]) -> None:
+        """Warn the user that some pages could not be fetched."""
+        console.print()
+        console.print(
+            Panel(
+                f"[{C_WARN}]{len(failed_urls)} page(s) could not be fetched "
+                f"and were skipped.[/{C_WARN}]\n"
+                + "\n".join(f"  [{C_DIM}]• {u}[/{C_DIM}]" for u in failed_urls[:5]),
+                title=f"[bold {C_WARN}]Scrape Warning[/bold {C_WARN}]",
+                border_style=C_WARN,
+                padding=(0, 2),
+            )
+        )
         console.print()
 
     # ── Follow-up ─────────────────────────────────────────────────────────────

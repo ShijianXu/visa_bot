@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Visa Bot – AI-powered visa application assistant.
+"""Visa Bot - AI-powered visa application assistant.
 
 Usage:
     python main.py
 
 Environment:
-    GROQ_API_KEY   required  – your Groq Cloud API key
-    LLM_PROVIDER   optional  – default: groq
-    GROQ_MODEL     optional  – default: llama-3.3-70b-versatile
+    GROQ_API_KEY   required  - your Groq Cloud API key
+    LLM_PROVIDER   optional  - default: groq
+    GROQ_MODEL     optional  - default: llama-3.3-70b-versatile
 
 Copy .env.example to .env and fill in your keys before running.
 """

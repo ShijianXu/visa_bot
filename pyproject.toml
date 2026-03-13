@@ -11,6 +11,10 @@ dependencies = [
     "ddgs>=9.0.0",
     "chromadb>=0.5.0",
     "python-dotenv>=1.0.0",
+    # Optional but strongly recommended search upgrade
+    "tavily-python>=0.3.0",
+    # Lightweight cross-encoder re-ranking (ONNX, no torch required)
+    "flashrank>=0.2.0",
 ]
 
 [project.scripts]

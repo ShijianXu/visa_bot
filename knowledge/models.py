@@ -21,6 +21,9 @@ class VisaDocument:
     doc_id: str = ""
 
     def __post_init__(self) -> None:
+        # Normalize for consistent cache key matching regardless of input casing
+        self.origin_country = self.origin_country.strip().lower()
+        self.destination_country = self.destination_country.strip().lower()
         if not self.doc_id:
             self.doc_id = hashlib.md5(self.source_url.encode()).hexdigest()
 
@@ -46,6 +49,7 @@ class VisaQuery:
     departure_date: str
     duration_of_stay: str
     # Optional fields
+    city_of_residence: str = ""   # city within the residence country, e.g. "Geneva"
     residence_permit: str = ""
     entry_type: str = "single"
     companions: str = ""
