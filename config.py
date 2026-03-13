@@ -10,6 +10,7 @@ load_dotenv()
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq")
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_FALLBACK_MODEL: str = os.getenv("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
 
 # ── Knowledge base ───────────────────────────────────────────────────────────
 KB_PATH: Path = Path(os.getenv("KB_PATH", "./knowledge_base"))

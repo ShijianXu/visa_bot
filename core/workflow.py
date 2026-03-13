@@ -60,133 +60,67 @@ conflict, and direct users to the official embassy for final confirmation."""
 # Used before storing a scraped page — strips boilerplate, keeps only
 # visa-relevant content. Cap input at 5 000 chars to control token use.
 _PREPROCESS_SYSTEM = """\
-You are a visa information extractor. A webpage has been scraped from a \
-consulate, embassy, or immigration portal. Extract ONLY visa-relevant content \
-and rewrite it as a structured factual record.
+You are a visa information extractor. Extract ONLY visa-relevant content from \
+the scraped page and output a structured factual record.
 
-CRITICAL: Preserve ALL of the following VERBATIM — never paraphrase or omit:
-  • URLs (online application portals, appointment booking pages, payment pages)
-  • Exact fee amounts with currency (e.g. "€80", "USD 185", "CHF 65")
-  • Bank / payment details (bank name, IBAN, account name, reference code)
-  • Physical addresses (consulate, VFS/TLS drop-off, mailing address)
-  • Phone numbers and email addresses
-  • Opening hours and appointment lead times
+VERBATIM (never paraphrase): URLs, exact fees with currency, bank/payment \
+details, physical addresses, phone/email, opening hours.
 
-Extract and organise ALL of the following that appear on this page:
+Extract these sections if present:
+- APPLICATION PORTAL: exact URL, registration steps, service used (VFS/TLS/gov)
+- DOCUMENTS: each document name + format/spec (copies, photo size, translation)
+- SUBMISSION: online URL / in-person address+hours / mail address
+- FEE & PAYMENT: exact amount, payment method, refundable on refusal?
+- APPOINTMENT: booking URL or phone, lead time
+- PROCESSING TIME: standard days/weeks, expedited option
+- VISA TYPES: categories, validity, entry type, nationality restrictions
 
-APPLICATION PORTAL
-- Exact URL where the online application form is filled in
-- Any required account registration steps before applying
-- Whether this is VFS Global / TLS Contact / government portal (name it)
-
-DOCUMENT CHECKLIST
-- Every required document with its exact name as used by the consulate
-- Format/specification per document (e.g. "passport copy: all pages, colour \
-scan; 2 passport photos 35×45 mm white background; bank statements: last \
-3 months")
-
-DOCUMENT SUBMISSION METHOD
-- Online upload: exact URL of the upload portal
-- In-person drop-off: exact address, opening hours, appointment required (Y/N)
-- Mail/courier: exact mailing address, return envelope instructions
-
-VISA FEE & PAYMENT
-- Exact fee(s) and currency
-- Payment method: credit/debit card on portal / bank transfer (provide bank \
-name, IBAN, account holder, payment reference format) / cash at window / \
-VFS service charge (separate amount)
-- Whether fee is non-refundable on refusal
-
-APPOINTMENT BOOKING
-- Exact URL or phone number to book
-- How far in advance appointments are typically available
-
-PROCESSING TIME
-- Standard processing time (business days or weeks)
-- Expedited option: availability, extra cost, timeframe
-
-VISA TYPES & ELIGIBILITY
-- Visa categories and who qualifies (nationalities, purposes)
-- Validity periods and entry type (single / multiple / transit)
-- Any nationality-specific restrictions or exemptions
-
-Discard: navigation menus, cookie banners, unrelated tourism information, \
-repeated legal boilerplate.
-
-If this page contains NO visa-related information, reply with exactly: \
-NOT_VISA_RELEVANT"""
+Discard navigation, cookie banners, and unrelated content.
+If NO visa info exists, reply: NOT_VISA_RELEVANT"""
 
 _GUIDE_TEMPLATE = """\
 TRAVELER PROFILE
-  • Nationality       : {nationality}
-  • Residence         : {residence} — {city_of_residence}
-  • Destination       : {destination}
-  • Purpose           : {purpose}
-  • Departure         : {departure_date}
-  • Duration          : {duration}
-  • Entry type        : {entry_type}
+  • Nationality : {nationality}
+  • Residence   : {residence} — {city_of_residence}
+  • Destination : {destination}
+  • Purpose     : {purpose}
+  • Departure   : {departure_date}  Duration: {duration}  Entry: {entry_type}
 {companions_line}
-════════════════════════════════════════
-RETRIEVED SOURCES
-════════════════════════════════════════
+SOURCES
 {context}
-════════════════════════════════════════
 
-TASK
-Using ONLY the sources above, write a precise, step-by-step visa application \
-guide for this traveler. Every step must be specific enough that the traveler \
-can act on it immediately — no vague instructions.
+TASK: Using ONLY the sources above, write a step-by-step visa application guide.
 
-STRICT RULES (violations make the guide useless):
-1. NEVER write "visit the official website", "check the embassy website", or \
-any similar placeholder. Instead, quote the EXACT URL from the source or write: \
-  ⚠ URL not found in retrieved sources — see [Source N]
-2. NEVER approximate fees. Quote the EXACT amount and currency from the source, \
-or write: ⚠ Fee not found in retrieved sources — see [Source N]
-3. NEVER write "prepare the required documents" without listing them. List \
-EVERY document by name with its format/specification.
-4. Cite every fact as [Source N] immediately after the fact.
-5. If two sources conflict on the same fact, show both values and flag: \
-  ⚠ Sources disagree — confirm with the consulate directly.
-
-Write the guide in these sections:
+Rules:
+1. Quote EXACT URLs — never write "visit the official website". If missing: ⚠ URL not in sources — see [Source N]
+2. Quote EXACT fees with currency. If missing: ⚠ Fee not in sources — see [Source N]
+3. List EVERY required document by name with format/spec.
+4. Cite every fact as [Source N].
+5. If sources conflict: ⚠ Sources disagree — confirm with consulate.
 
 ## 1. Visa Requirement
-Does {nationality} need a visa for {destination}? (visa-free / on-arrival / \
-e-visa / embassy visa). Which category applies for {purpose} travel?
+Visa-free / on-arrival / e-visa / embassy visa for {nationality} → {destination} ({purpose})?
 
 ## 2. Application Portal
-The exact URL where the form is filled in (or where to book an appointment \
-if the process is in-person only). Any account-registration steps before \
-applying.
+Exact URL and any account-registration steps.
 
 ## 3. Required Documents
-Numbered checklist. For each item: exact name, format, and specification \
-(validity, number of copies, photo dimensions, translation requirement, etc.).
+Numbered list: name, format, spec (copies, photo size, translation, validity).
 
 ## 4. How to Submit
-State clearly: online upload / VFS Global / TLS Contact / in-person at \
-consulate / mail.
-- Online: exact upload portal URL.
-- VFS/TLS or in-person: exact address, opening hours, whether appointment \
-is mandatory (booking URL or phone number).
-- Mail: exact mailing address and any return-envelope instructions.
+Online URL / VFS or in-person address + hours + booking URL / mail address.
 
-## 5. Visa Fee & Payment
-Exact fee(s) with currency. How to pay: card on portal / bank transfer \
-(bank name, IBAN, account name if in sources) / cash at window / VFS \
-service charge. Whether refundable on refusal.
+## 5. Fee & Payment
+Exact amount, payment method, refundable on refusal?
 
 ## 6. Processing Time
-Standard time in business days/weeks. Expedited option if available. How \
-far in advance to apply given the departure date {departure_date}.
+Standard days/weeks. Expedited option. Recommended apply-by date for {departure_date}.
 
 ## 7. After Submission
-What to expect: confirmation, biometric appointment (if needed), passport \
-collection or postal return, e-visa PDF.
+Confirmation, biometrics, passport return, e-visa PDF.
 
-## 8. Official Sources
-All source URLs used in this guide."""
+## 8. Sources
+All URLs cited."""
 
 _FOLLOWUP_TEMPLATE = """\
 TRAVELER SITUATION
@@ -393,7 +327,7 @@ class VisaWorkflow:
         # 6 ── Re-rank ─────────────────────────────────────────────────────────
         step("reranking", "scoring relevance …")
         docs = _rerank_docs(rag_query, docs)
-        docs = docs[:6]  # keep top-6 after re-ranking
+        docs = docs[:4]  # keep top-4 after re-ranking
 
         sources = list({d["metadata"]["source_url"] for d in docs})
         return {
@@ -633,7 +567,7 @@ class VisaWorkflow:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _format_context(docs: list[dict], max_chars_per_doc: int = 4000) -> str:
+def _format_context(docs: list[dict], max_chars_per_doc: int = 1500) -> str:
     parts = []
     for i, doc in enumerate(docs, 1):
         meta = doc["metadata"]

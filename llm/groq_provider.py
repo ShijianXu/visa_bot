@@ -17,6 +17,7 @@ class GroqProvider(LLMProvider):
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self._client = Groq(api_key=api_key or config.GROQ_API_KEY)
         self._model = model or config.GROQ_MODEL
+        self._fallback_model = config.GROQ_FALLBACK_MODEL
 
     # ── LLMProvider interface ────────────────────────────────────────────────
 
@@ -26,43 +27,62 @@ class GroqProvider(LLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:
-        last_exc: Exception | None = None
-        for attempt in range(_MAX_RETRIES):
-            try:
-                response = self._client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                return response.choices[0].message.content
-            except RateLimitError as exc:
-                last_exc = exc
-                time.sleep(2 ** attempt)
-            except APIError as exc:
-                # Retry on 5xx server errors only
-                if getattr(exc, "status_code", 0) >= 500:
+        for model in self._model_chain():
+            last_exc: Exception | None = None
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    response = self._client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                    return response.choices[0].message.content
+                except RateLimitError as exc:
                     last_exc = exc
-                    time.sleep(1)
-                else:
-                    raise
-        raise last_exc  # type: ignore[misc]
+                    time.sleep(2 ** attempt)
+                except APIError as exc:
+                    if getattr(exc, "status_code", 0) >= 500:
+                        last_exc = exc
+                        time.sleep(1)
+                    else:
+                        raise
+            # All retries on this model exhausted — try fallback if rate limited
+            if isinstance(last_exc, RateLimitError) and model != self._fallback_model:
+                continue
+            raise last_exc  # type: ignore[misc]
+        raise RuntimeError("All models exhausted")
 
     def chat_stream(
         self,
         messages: list[dict],
         temperature: float = 0.3,
     ) -> Iterator[str]:
-        stream = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            temperature=temperature,
-            stream=True,
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+        for model in self._model_chain():
+            try:
+                stream = self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    stream=True,
+                )
+                for chunk in stream:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        yield delta
+                return
+            except RateLimitError:
+                if model != self._fallback_model:
+                    continue
+                raise
+
+    def _model_chain(self) -> list[str]:
+        """Primary model first, fallback second (deduplicated)."""
+        seen = []
+        for m in [self._model, self._fallback_model]:
+            if m and m not in seen:
+                seen.append(m)
+        return seen
 
     @property
     def model_name(self) -> str:
