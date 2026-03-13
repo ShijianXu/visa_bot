@@ -35,3 +35,10 @@ USE_RERANKER: bool = os.getenv("USE_RERANKER", "true").lower() == "true"
 # navigation/boilerplate and extract only visa-relevant content.
 # Adds ~1-2 s per page but produces much cleaner chunks for RAG.
 PREPROCESS_DOCS: bool = os.getenv("PREPROCESS_DOCS", "true").lower() == "true"
+
+# ── LLM-driven query generation ──────────────────────────────────────────────
+# When True, the LLM generates targeted search queries before the web search,
+# using its knowledge of how each country's visa system works (e.g. VFS Global
+# vs direct consulate, typical portal names, local service centres).
+# Adds one fast LLM call (~1 s) but significantly improves page coverage.
+USE_LLM_QUERY_GEN: bool = os.getenv("USE_LLM_QUERY_GEN", "true").lower() == "true"

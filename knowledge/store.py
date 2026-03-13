@@ -33,13 +33,16 @@ class KnowledgeStore:
 
     # ── Write ─────────────────────────────────────────────────────────────────
 
-    def add_document(self, doc: VisaDocument) -> None:
+    def add_document(self, doc: VisaDocument, _evict: bool = True) -> None:
         """Upsert a document (de-duplicates by URL hash).
 
         Evicts stale documents for the same country pair before indexing so
         that outdated visa rules are replaced by the new data.
+        Pass _evict=False when adding a batch to avoid redundant DB reads
+        (call evict_stale() once before the loop instead).
         """
-        self.evict_stale(doc.origin_country, doc.destination_country)
+        if _evict:
+            self.evict_stale(doc.origin_country, doc.destination_country)
         chunks = _chunk(doc.content, max_chars=2500)
         ids = [f"{doc.doc_id}_{i}" for i in range(len(chunks))]
         metas = [doc.to_metadata() for _ in chunks]

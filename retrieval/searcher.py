@@ -205,6 +205,7 @@ def search_topic(
         f"{topic} {destination} visa {city or residence}".strip(),
         f"{destination} consulate {location} {topic}".strip(),
         f"{topic} {nationality} {destination} visa official",
+        f"{destination} visa {topic} exact URL how to {nationality}",
     ]
 
     local = _DEST_LOCAL_TERMS.get(dest, "")
@@ -221,15 +222,20 @@ def search_visa_info(
     city: str = "",
     purpose: str = "tourism",
     max_results: int | None = None,
+    extra_queries: list[str] | None = None,
 ) -> list[dict]:
     """Return a ranked list of search results about visa requirements.
 
     Official government/embassy URLs are sorted to the top.
     Curated OFFICIAL_SOURCES for the destination are always prepended.
+    extra_queries (LLM-generated) are prepended to rule-based queries so
+    they are tried first and consume slots before generic fallbacks.
     Each result: {url, title, snippet, content, query, official}
     """
     max_results = max_results or config.MAX_SEARCH_RESULTS
-    queries = _build_queries(nationality, destination, residence, city, purpose)
+    rule_queries = _build_queries(nationality, destination, residence, city, purpose)
+    # LLM-generated queries go first — they're more targeted
+    queries = list(extra_queries or []) + rule_queries
     search_hits = _run_search(queries, max_results, search_depth="advanced")
 
     # Prepend curated official sources so they are always scraped first
@@ -357,6 +363,13 @@ def _build_queries(
             f"{dest} embassy {location} {nat} visa requirements",
             f"apply {dest} visa {location} {nat} official",
         ]
+        # Procedure-specific: application portal, payment, documents, appointment
+        queries += [
+            f"{dest} visa online application form {nat} {location}",
+            f"{dest} consulate {location} visa fee how to pay",
+            f"{dest} consulate {location} required documents checklist {nat}",
+            f"{dest} visa appointment booking {location}",
+        ]
 
     if res and res != location:
         # Broad country-level fallback queries
@@ -369,6 +382,7 @@ def _build_queries(
         f"visa requirements {nat} citizens {dest} official government",
         f"{dest} visa {nat} entry requirements {purpose}",
         f"{dest} immigration {nat} official",
+        f"{dest} visa application procedure {nat} documents upload submit",
     ]
 
     # Local-language query: official consulate pages are often only in the

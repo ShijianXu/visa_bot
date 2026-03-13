@@ -61,35 +61,70 @@ conflict, and direct users to the official embassy for final confirmation."""
 # visa-relevant content. Cap input at 5 000 chars to control token use.
 _PREPROCESS_SYSTEM = """\
 You are a visa information extractor. A webpage has been scraped from a \
-consulate, embassy, or immigration portal. Extract ONLY the visa-relevant \
-content and rewrite it in clean, structured prose.
+consulate, embassy, or immigration portal. Extract ONLY visa-relevant content \
+and rewrite it as a structured factual record.
 
-Extract and organise:
-- Visa types available and who qualifies (nationalities, purposes)
-- Eligibility conditions and restrictions
-- Complete document checklist
-- Application steps and procedure
-- Fees (exact amounts and currency)
-- Processing times (standard and express)
-- Where to apply: consulate addresses, online portal URLs
+CRITICAL: Preserve ALL of the following VERBATIM — never paraphrase or omit:
+  • URLs (online application portals, appointment booking pages, payment pages)
+  • Exact fee amounts with currency (e.g. "€80", "USD 185", "CHF 65")
+  • Bank / payment details (bank name, IBAN, account name, reference code)
+  • Physical addresses (consulate, VFS/TLS drop-off, mailing address)
+  • Phone numbers and email addresses
+  • Opening hours and appointment lead times
+
+Extract and organise ALL of the following that appear on this page:
+
+APPLICATION PORTAL
+- Exact URL where the online application form is filled in
+- Any required account registration steps before applying
+- Whether this is VFS Global / TLS Contact / government portal (name it)
+
+DOCUMENT CHECKLIST
+- Every required document with its exact name as used by the consulate
+- Format/specification per document (e.g. "passport copy: all pages, colour \
+scan; 2 passport photos 35×45 mm white background; bank statements: last \
+3 months")
+
+DOCUMENT SUBMISSION METHOD
+- Online upload: exact URL of the upload portal
+- In-person drop-off: exact address, opening hours, appointment required (Y/N)
+- Mail/courier: exact mailing address, return envelope instructions
+
+VISA FEE & PAYMENT
+- Exact fee(s) and currency
+- Payment method: credit/debit card on portal / bank transfer (provide bank \
+name, IBAN, account holder, payment reference format) / cash at window / \
+VFS service charge (separate amount)
+- Whether fee is non-refundable on refusal
+
+APPOINTMENT BOOKING
+- Exact URL or phone number to book
+- How far in advance appointments are typically available
+
+PROCESSING TIME
+- Standard processing time (business days or weeks)
+- Expedited option: availability, extra cost, timeframe
+
+VISA TYPES & ELIGIBILITY
+- Visa categories and who qualifies (nationalities, purposes)
 - Validity periods and entry type (single / multiple / transit)
-- Special rules or exceptions
+- Any nationality-specific restrictions or exemptions
 
-Discard: navigation menus, cookie banners, unrelated news, general tourism \
-information, repeated boilerplate.
+Discard: navigation menus, cookie banners, unrelated tourism information, \
+repeated legal boilerplate.
 
-If this page contains NO visa-related information, reply with exactly one word: \
+If this page contains NO visa-related information, reply with exactly: \
 NOT_VISA_RELEVANT"""
 
 _GUIDE_TEMPLATE = """\
 TRAVELER PROFILE
-  • Nationality : {nationality}
-  • Residence   : {residence}
-  • Destination : {destination}
-  • Purpose     : {purpose}
-  • Departure   : {departure_date}
-  • Duration    : {duration}
-  • Entry type  : {entry_type}
+  • Nationality       : {nationality}
+  • Residence         : {residence} — {city_of_residence}
+  • Destination       : {destination}
+  • Purpose           : {purpose}
+  • Departure         : {departure_date}
+  • Duration          : {duration}
+  • Entry type        : {entry_type}
 {companions_line}
 ════════════════════════════════════════
 RETRIEVED SOURCES
@@ -98,36 +133,60 @@ RETRIEVED SOURCES
 ════════════════════════════════════════
 
 TASK
-Using ONLY the sources above, write a comprehensive, specific visa guide for \
-this traveler.
+Using ONLY the sources above, write a precise, step-by-step visa application \
+guide for this traveler. Every step must be specific enough that the traveler \
+can act on it immediately — no vague instructions.
 
-Before writing each section, scan the sources for:
-  ✓ Whether {nationality} needs a visa for {destination} (or visa-free / on-arrival)
-  ✓ Which visa category applies for {purpose} travel
-  ✓ Where someone living in {residence} must apply (consulate city, portal URL)
-  ✓ Every required document — list them all, do not generalise
-  ✓ Exact fees (quote the number and currency from the source)
-  ✓ Processing time in business days or weeks
-  ✓ Any restrictions or special rules for {nationality} applicants
+STRICT RULES (violations make the guide useless):
+1. NEVER write "visit the official website", "check the embassy website", or \
+any similar placeholder. Instead, quote the EXACT URL from the source or write: \
+  ⚠ URL not found in retrieved sources — see [Source N]
+2. NEVER approximate fees. Quote the EXACT amount and currency from the source, \
+or write: ⚠ Fee not found in retrieved sources — see [Source N]
+3. NEVER write "prepare the required documents" without listing them. List \
+EVERY document by name with its format/specification.
+4. Cite every fact as [Source N] immediately after the fact.
+5. If two sources conflict on the same fact, show both values and flag: \
+  ⚠ Sources disagree — confirm with the consulate directly.
 
-Write the guide using these sections:
+Write the guide in these sections:
 
-## Visa Requirement
-## Application Timeline
-## Where to Apply
-## Required Documents
-## Step-by-Step Application Guide
-## Fees & Processing Time
-## Important Notes
-## Official Sources
+## 1. Visa Requirement
+Does {nationality} need a visa for {destination}? (visa-free / on-arrival / \
+e-visa / embassy visa). Which category applies for {purpose} travel?
 
-Rules:
-- Cite the source inline as [Source N] after every specific fact (fee, \
-processing time, document name, address).
-- If two sources give different information, show both and recommend \
-official confirmation.
-- If a piece of information is not in any source, say so explicitly — \
-do NOT invent it."""
+## 2. Application Portal
+The exact URL where the form is filled in (or where to book an appointment \
+if the process is in-person only). Any account-registration steps before \
+applying.
+
+## 3. Required Documents
+Numbered checklist. For each item: exact name, format, and specification \
+(validity, number of copies, photo dimensions, translation requirement, etc.).
+
+## 4. How to Submit
+State clearly: online upload / VFS Global / TLS Contact / in-person at \
+consulate / mail.
+- Online: exact upload portal URL.
+- VFS/TLS or in-person: exact address, opening hours, whether appointment \
+is mandatory (booking URL or phone number).
+- Mail: exact mailing address and any return-envelope instructions.
+
+## 5. Visa Fee & Payment
+Exact fee(s) with currency. How to pay: card on portal / bank transfer \
+(bank name, IBAN, account name if in sources) / cash at window / VFS \
+service charge. Whether refundable on refusal.
+
+## 6. Processing Time
+Standard time in business days/weeks. Expedited option if available. How \
+far in advance to apply given the departure date {departure_date}.
+
+## 7. After Submission
+What to expect: confirmation, biometric appointment (if needed), passport \
+collection or postal return, e-visa PDF.
+
+## 8. Official Sources
+All source URLs used in this guide."""
 
 _FOLLOWUP_TEMPLATE = """\
 TRAVELER SITUATION
@@ -146,16 +205,16 @@ RETRIEVED SOURCE CONTEXT
 {context}
 ════════════════════════════════════════
 
-Answer this specific question for the traveler above.
+Answer this specific question. The traveler holds a {nationality} passport \
+and applies at the {destination} consulate in {residence}.
 
-Key context: they hold a {nationality} passport and apply at the \
-{destination} consulate in {residence} — not in {destination} itself.
-
-Instructions:
-- Extract the directly relevant facts from the sources above.
-- Quote exact numbers (fees, days, amounts) and cite the source as [Source N].
-- If the sources do not contain enough information to answer fully, say so \
-and provide the official embassy URL."""
+Rules:
+- Quote EXACT URLs, amounts, addresses, and phone numbers verbatim from \
+the sources. Never paraphrase them.
+- Cite every fact as [Source N] immediately after the fact.
+- If the answer requires a URL or fee that is NOT in the sources, write: \
+  ⚠ Not found in retrieved sources — try: search: {question}
+- Never write vague instructions like "visit the official website"."""
 
 _FALLBACK_TEMPLATE = """\
 Provide a general visa guidance overview for:
@@ -167,6 +226,31 @@ Provide a general visa guidance overview for:
 Use the same section structure as a standard visa guide. \
 State clearly that this is based on general knowledge and the user should \
 verify all details with the official embassy."""
+
+_QUERY_GEN_SYSTEM = """\
+You are a search query strategist specialised in visa applications. \
+You know which countries use VFS Global, TLS Contact, BLS International, \
+or direct consulate applications; which ones have online e-visa portals; \
+and how embassies typically structure their documentation pages."""
+
+_QUERY_GEN_TEMPLATE = """\
+Generate search queries to find official visa application information for:
+  • Nationality : {nationality}
+  • Lives in    : {city_of_residence}, {residence}
+  • Destination : {destination}
+  • Purpose     : {purpose}
+
+Use your knowledge of {destination}'s visa system. For example:
+- If {destination} uses VFS Global or TLS Contact for applicants in \
+{residence}, name them explicitly in the queries.
+- Target {city_of_residence} as the application city (that is where the \
+consulate or visa centre is).
+- Cover all of: online application portal URL, required documents checklist, \
+visa fee and exact payment method, appointment booking, document drop-off \
+or mailing address.
+
+Output ONLY the search queries, one per line. \
+No numbering, no bullets, no explanation."""
 
 
 # ── Workflow ──────────────────────────────────────────────────────────────────
@@ -210,11 +294,15 @@ class VisaWorkflow:
 
         if not from_cache:
             # 2 ── Web search ──────────────────────────────────────────────────
+            step("query_gen", f"{query.nationality} → {query.destination} …")
+            llm_queries = self._generate_search_queries(query)
+
             step("searching", "querying official sources …")
             try:
                 hits = search_visa_info(
                     query.nationality, query.destination,
                     query.residence, query.city_of_residence, query.purpose,
+                    extra_queries=llm_queries,
                 )
             except RuntimeError:
                 hits = []
@@ -250,6 +338,7 @@ class VisaWorkflow:
             # Pre-process pages with LLM (if enabled) then index them.
             preprocess_label = " (preprocessing …)" if config.PREPROCESS_DOCS else ""
             step("storing", f"indexing {len(pages)} documents{preprocess_label}")
+            self.store.evict_stale(query.nationality, query.destination)
             for page in pages:
                 page = self._preprocess_page(page)
                 hit = next((h for h in hits if h["url"] == page["url"]), {})
@@ -260,7 +349,7 @@ class VisaWorkflow:
                     destination_country=query.destination,
                     page_title=hit.get("title") or page.get("title", ""),
                 )
-                self.store.add_document(doc)
+                self.store.add_document(doc, _evict=False)
 
             # For pages that could not be scraped (JS-heavy, bot-blocked, etc.),
             # fall back to the DuckDuckGo snippet — it's short but often contains
@@ -287,7 +376,10 @@ class VisaWorkflow:
 
         # 5 ── RAG retrieval ───────────────────────────────────────────────────
         step("retrieving", "searching knowledge base …")
-        rag_query = f"visa requirements {query.nationality} {query.destination} {query.purpose}"
+        rag_query = (
+            f"visa application form portal documents fee payment appointment booking "
+            f"{query.nationality} {query.destination} {query.purpose} {query.residence}"
+        )
         docs = self.store.search(
             query=rag_query,
             origin=query.nationality,
@@ -413,19 +505,20 @@ class VisaWorkflow:
         pages = pre_fetched_fu + scraped_fu
 
         if pages:
-            step("storing", f"indexing {len(pages)} new documents …")
+            preprocess_label = " (preprocessing …)" if config.PREPROCESS_DOCS else ""
+            step("storing", f"indexing {len(pages)} new documents{preprocess_label} …")
+            self.store.evict_stale(query.nationality, query.destination)
             for page in pages:
-                title = next(
-                    (h["title"] for h in hits if h["url"] == page["url"]), ""
-                )
+                page = self._preprocess_page(page)
+                hit = next((h for h in hits if h["url"] == page["url"]), {})
                 doc = VisaDocument(
                     content=page["text"],
                     source_url=page["url"],
                     origin_country=query.nationality,
                     destination_country=query.destination,
-                    page_title=title or page.get("title", ""),
+                    page_title=hit.get("title") or page.get("title", ""),
                 )
-                self.store.add_document(doc)
+                self.store.add_document(doc, _evict=False)
 
         step("generating", "composing answer …")
         answer = self.answer_followup(question, query, history=history)
@@ -433,6 +526,40 @@ class VisaWorkflow:
         return answer, new_sources
 
     # ── Private ───────────────────────────────────────────────────────────────
+
+    def _generate_search_queries(self, query: VisaQuery) -> list[str]:
+        """Ask the LLM to generate targeted search queries for this application.
+
+        Falls back to [] on any failure so the rule-based queries still run.
+        """
+        if not config.USE_LLM_QUERY_GEN:
+            return []
+        try:
+            city_display = query.city_of_residence or query.residence
+            prompt = _QUERY_GEN_TEMPLATE.format(
+                nationality=query.nationality,
+                city_of_residence=city_display,
+                residence=query.residence,
+                destination=query.destination,
+                purpose=query.purpose,
+            )
+            raw = self.llm.chat(
+                messages=[
+                    {"role": "system", "content": _QUERY_GEN_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0,
+                max_tokens=400,
+            )
+            queries = [
+                # Strip common list prefixes the LLM might add despite instructions
+                line.strip().lstrip("0123456789.-•) ")
+                for line in raw.splitlines()
+                if line.strip() and len(line.strip()) > 10
+            ]
+            return queries[:10]
+        except Exception:
+            return []
 
     def _preprocess_page(self, page: dict) -> dict:
         """Use the LLM to strip boilerplate and keep only visa-relevant content.
@@ -461,11 +588,13 @@ class VisaWorkflow:
     def _build_guide_prompt(self, query: VisaQuery, docs: list[dict]) -> str:
         context = _format_context(docs)
         companions_line = (
-            f"  • Companions  : {query.companions}" if query.companions else ""
+            f"  • Companions        : {query.companions}" if query.companions else ""
         )
+        city_display = query.city_of_residence or query.residence
         return _GUIDE_TEMPLATE.format(
             nationality=query.nationality,
             residence=query.residence,
+            city_of_residence=city_display,
             destination=query.destination,
             purpose=query.purpose,
             departure_date=query.departure_date,
@@ -504,7 +633,7 @@ class VisaWorkflow:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _format_context(docs: list[dict], max_chars_per_doc: int = 3000) -> str:
+def _format_context(docs: list[dict], max_chars_per_doc: int = 4000) -> str:
     parts = []
     for i, doc in enumerate(docs, 1):
         meta = doc["metadata"]

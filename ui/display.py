@@ -38,10 +38,12 @@ _BANNER = r"""
 _STEP_LABELS: dict[str, str] = {
     "cache_check":  "Checking knowledge base",
     "cache_hit":    "Knowledge base hit — skipping web search",
+    "query_gen":    "Generating targeted search queries",
     "searching":    "Searching official sources",
     "scraping":     "Fetching pages",
     "storing":      "Indexing documents",
     "retrieving":   "Retrieving relevant context",
+    "reranking":    "Re-ranking by relevance",
     "generating":   "Composing visa guide",
     "fallback":     "Falling back to LLM knowledge",
     "search_failed":"Search returned no results",
