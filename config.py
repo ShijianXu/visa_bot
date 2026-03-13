@@ -8,9 +8,16 @@ load_dotenv()
 
 # ── LLM ─────────────────────────────────────────────────────────────────────
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq")
+
+# Groq
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_FALLBACK_MODEL: str = os.getenv("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
+
+# Google Gemini  (free key at https://aistudio.google.com/apikey)
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_FALLBACK_MODEL: str = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.0-flash-lite")
 
 # ── Knowledge base ───────────────────────────────────────────────────────────
 KB_PATH: Path = Path(os.getenv("KB_PATH", "./knowledge_base"))

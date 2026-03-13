@@ -6,15 +6,12 @@ To add a new provider, import its class here and add it to _REGISTRY.
 import config
 from .base import LLMProvider
 from .groq_provider import GroqProvider
+from .gemini_provider import GeminiProvider
 
 # ── Registry ─────────────────────────────────────────────────────────────────
-# key  → provider class
-# Add new providers here, e.g.:
-#   "openai":    OpenAIProvider,
-#   "anthropic": AnthropicProvider,
-#   "ollama":    OllamaProvider,
 _REGISTRY: dict[str, type[LLMProvider]] = {
-    "groq": GroqProvider,
+    "groq":   GroqProvider,
+    "gemini": GeminiProvider,
 }
 
 

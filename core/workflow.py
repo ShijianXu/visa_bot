@@ -63,20 +63,29 @@ _PREPROCESS_SYSTEM = """\
 You are a visa information extractor. Extract ONLY visa-relevant content from \
 the scraped page and output a structured factual record.
 
-VERBATIM (never paraphrase): URLs, exact fees with currency, bank/payment \
-details, physical addresses, phone/email, opening hours.
+CRITICAL — copy these VERBATIM, never paraphrase or summarise:
+- All URLs (application portals, booking links, document upload pages)
+- Exact fees with currency symbol and amount
+- Full physical address (street number, street name, postal code, city)
+- Phone numbers and email addresses
+- Opening hours and appointment lead times
+- Bank or payment details
 
 Extract these sections if present:
-- APPLICATION PORTAL: exact URL, registration steps, service used (VFS/TLS/gov)
-- DOCUMENTS: each document name + format/spec (copies, photo size, translation)
-- SUBMISSION: online URL / in-person address+hours / mail address
-- FEE & PAYMENT: exact amount, payment method, refundable on refusal?
-- APPOINTMENT: booking URL or phone, lead time
-- PROCESSING TIME: standard days/weeks, expedited option
-- VISA TYPES: categories, validity, entry type, nationality restrictions
+- CONSULATE / VISA CENTRE: official name, full street address, postal code, \
+  city, phone, email, opening hours, which nationalities it serves
+- APPLICATION PORTAL: exact URL, registration steps, service used (VFS/TLS/direct gov)
+- DOCUMENTS: each document name + ONLY the specs explicitly stated \
+  (format, number of copies, photo dimensions, translation requirement, validity period) \
+  — do NOT add specs that are not on the page
+- SUBMISSION: online URL / in-person drop-off procedure / mail-in address
+- FEE & PAYMENT: exact amount + currency, payment method(s), refundable on refusal?
+- APPOINTMENT: booking URL or phone number, typical wait time / lead time
+- PROCESSING TIME: standard days/weeks, expedited option and cost
+- VISA TYPES: categories, validity period, single/multiple entry, nationality restrictions
 
-Discard navigation, cookie banners, and unrelated content.
-If NO visa info exists, reply: NOT_VISA_RELEVANT"""
+Discard navigation menus, cookie banners, social media widgets, and unrelated content.
+If NO visa info exists on this page, reply exactly: NOT_VISA_RELEVANT"""
 
 _GUIDE_TEMPLATE = """\
 TRAVELER PROFILE
@@ -89,38 +98,65 @@ TRAVELER PROFILE
 SOURCES
 {context}
 
-TASK: Using ONLY the sources above, write a step-by-step visa application guide.
+TASK: Using ONLY the sources above, write a step-by-step visa application guide \
+for a {nationality} passport holder applying from {city_of_residence}, {residence}.
 
 Rules:
-1. Quote EXACT URLs — never write "visit the official website". If missing: ⚠ URL not in sources — see [Source N]
-2. Quote EXACT fees with currency. If missing: ⚠ Fee not in sources — see [Source N]
-3. List EVERY required document by name with format/spec.
-4. Cite every fact as [Source N].
-5. If sources conflict: ⚠ Sources disagree — confirm with consulate.
+1. Quote EXACT URLs verbatim. Never write "visit the official website".
+   If a URL is not in sources: ⚠ URL not found in sources — check [Source N]
+2. NEVER write "Not specified", "N/A", "Varies", or any placeholder.
+   If a detail (e.g. photo size, number of copies) is not confirmed in sources, \
+   simply omit that sub-field. Only write what is confirmed.
+3. For every document, list ONLY the details that appear explicitly in sources \
+   (e.g. if copies are not mentioned, do not mention copies).
+4. Fees: state the exact amount and currency from sources. Then add the \
+   approximate equivalent in {residence} local currency with note \
+   "(approx. — verify current rate)". If fee is not in sources: \
+   ⚠ Fee not found in sources — check [Source N]
+5. Cite every fact as [Source N] immediately after the fact.
+6. If sources conflict: ⚠ Sources disagree — confirm with consulate.
 
 ## 1. Visa Requirement
-Visa-free / on-arrival / e-visa / embassy visa for {nationality} → {destination} ({purpose})?
+State whether {nationality} citizens need a visa for {destination} ({purpose}). \
+If visa-free or on-arrival, stop here and explain the conditions.
 
-## 2. Application Portal
-Exact URL and any account-registration steps.
+## 2. Where to Apply — Consulate / Visa Centre in {city_of_residence}
+THIS IS THE MOST IMPORTANT SECTION. Identify the exact office in {city_of_residence} \
+(or nearest city in {residence}) where {nationality} passport holders apply for a \
+{destination} visa. Provide:
+- Full official name of the consulate, embassy, or visa application centre
+- Complete street address (number, street, postal code, city)
+- Phone number and email (verbatim from sources)
+- Opening hours and days
+- Appointment booking URL or phone number
+If the application is online only (e-visa), state the portal URL and skip address.
 
-## 3. Required Documents
-Numbered list: name, format, spec (copies, photo size, translation, validity).
+## 3. Application Portal
+Exact URL for the online application form (if applicable) and account-registration steps.
 
-## 4. How to Submit
-Online URL / VFS or in-person address + hours + booking URL / mail address.
+## 4. Required Documents
+Numbered list. For each document include ONLY the details confirmed in sources \
+(name, format, number of copies, photo specs, whether translation is required, \
+validity period). Do not list sub-fields that are not mentioned in sources.
 
-## 5. Fee & Payment
-Exact amount, payment method, refundable on refusal?
+## 5. How to Submit
+Online submission URL / in-person drop-off procedure / VFS or TLS centre address \
+and booking URL / mail-in instructions — whichever applies.
 
-## 6. Processing Time
-Standard days/weeks. Expedited option. Recommended apply-by date for {departure_date}.
+## 6. Fee & Payment
+Exact amount + currency [Source N], approximate {residence} currency equivalent, \
+accepted payment methods, and whether the fee is refundable on refusal.
 
-## 7. After Submission
-Confirmation, biometrics, passport return, e-visa PDF.
+## 7. Processing Time
+Standard processing days/weeks. Expedited option if available. \
+Recommended latest application date given departure on {departure_date}.
 
-## 8. Sources
-All URLs cited."""
+## 8. After Submission
+What happens next: confirmation email, biometrics appointment, passport collection \
+or postal return, e-visa PDF download.
+
+## 9. Sources
+List every URL cited in this guide."""
 
 _FOLLOWUP_TEMPLATE = """\
 TRAVELER SITUATION
@@ -165,29 +201,50 @@ State clearly that this is based on general knowledge and the user should \
 verify all details with the official embassy in {residence}."""
 
 _QUERY_GEN_SYSTEM = """\
-You are a search query strategist specialised in visa applications. \
-You know which countries use VFS Global, TLS Contact, BLS International, \
-or direct consulate applications; which ones have online e-visa portals; \
-and how embassies typically structure their documentation pages."""
+You are a visa application research specialist. You have detailed knowledge of:
+- Which countries use VFS Global, TLS Contact, BLS International, or direct \
+consulate applications, and in which residence countries each is used.
+- Which destinations offer e-visa or visa-on-arrival to which nationalities.
+- How embassies and consulates structure their official websites and what \
+sub-pages contain documents checklists, fee schedules, and appointment booking.
+- The exact consulate or visa application centre serving each major city."""
 
 _QUERY_GEN_TEMPLATE = """\
-Generate search queries to find official visa application information for:
-  • Nationality : {nationality}
-  • Lives in    : {city_of_residence}, {residence}
-  • Destination : {destination}
-  • Purpose     : {purpose}
+Generate targeted search queries to find the CURRENT, OFFICIAL visa application \
+procedure for this exact traveler:
 
-Use your knowledge of {destination}'s visa system. For example:
-- If {destination} uses VFS Global or TLS Contact for applicants in \
-{residence}, name them explicitly in the queries.
-- Target {city_of_residence} as the application city (that is where the \
-consulate or visa centre is).
-- Cover all of: online application portal URL, required documents checklist, \
-visa fee and exact payment method, appointment booking, document drop-off \
-or mailing address.
+  Nationality : {nationality}
+  Residence   : {city_of_residence}, {residence}
+  Destination : {destination}
+  Purpose     : {purpose}
 
-Output ONLY the search queries, one per line. \
-No numbering, no bullets, no explanation."""
+STEP 1 — Identify the application channel:
+Based on your knowledge, state (in a comment NOT included in output) which \
+channel handles {destination} visa applications in {residence}: \
+VFS Global / TLS Contact / BLS International / direct consulate / e-visa portal.
+Then generate queries that name that channel explicitly.
+
+STEP 2 — Generate queries covering these 6 topics, one query each:
+1. The specific consulate or visa centre in {city_of_residence} that handles \
+{destination} visas for {nationality} — find its official page or address.
+2. The exact online application portal URL for {destination} visa from {residence}.
+3. The required documents checklist for {nationality} applying for \
+{destination} {purpose} visa from {residence}.
+4. The visa fee amount and accepted payment methods at the {city_of_residence} location.
+5. Appointment booking for {destination} visa in {city_of_residence}.
+6. {destination} MFA or immigration official page listing consulates in {residence} \
+or the consulate general in {city_of_residence}.
+
+STEP 3 — Add 2 queries in the local language of {destination} \
+(e.g. if destination is France, write queries in French) targeting the \
+official consulate or immigration website page for applicants in {residence}.
+
+Rules:
+- Every query must be specific enough to return the exact page, not a generic \
+overview. Include city names, service provider names, and nationality.
+- Do NOT generate queries about general visa eligibility or whether a visa is \
+needed — focus only on HOW to apply.
+- Output ONLY the queries, one per line. No numbers, bullets, or explanations."""
 
 
 # ── Workflow ──────────────────────────────────────────────────────────────────
@@ -312,25 +369,41 @@ class VisaWorkflow:
             step("cache_hit", "fresh data found in knowledge base")
 
         # 5 ── RAG retrieval ───────────────────────────────────────────────────
+        # Run focused queries per guide section so each section gets a chance
+        # to pull the most relevant chunks, then deduplicate by content id.
         step("retrieving", "searching knowledge base …")
-        rag_query = (
-            f"visa application form portal documents fee payment appointment booking "
-            f"{query.nationality} {query.destination} {query.purpose} {query.residence}"
-        )
-        docs = self.store.search(
-            query=rag_query,
-            origin=query.nationality,
-            destination=query.destination,
-            n_results=8,  # fetch more so re-ranker has more to work with
-        )
+        loc = query.city_of_residence or query.residence
+        _rag_queries = [
+            (f"{query.destination} consulate embassy visa centre address phone "
+             f"opening hours {loc}"),
+            (f"how to apply {query.destination} visa step by step portal URL "
+             f"{query.nationality} {loc}"),
+            (f"{query.destination} visa required documents checklist "
+             f"{query.nationality} {query.purpose}"),
+            (f"{query.destination} visa fee amount payment method {loc}"),
+            (f"{query.destination} visa appointment booking submission address {loc}"),
+        ]
+        seen_ids: set[str] = set()
+        docs: list[dict] = []
+        for rq in _rag_queries:
+            for d in self.store.search(
+                query=rq,
+                origin=query.nationality,
+                destination=query.destination,
+                n_results=4,
+            ):
+                uid = d["metadata"].get("source_url", "") + d["content"][:80]
+                if uid not in seen_ids:
+                    seen_ids.add(uid)
+                    docs.append(d)
 
         if not docs:
             return self._fallback_result(query, failed_urls=failed_urls)
 
         # 6 ── Re-rank ─────────────────────────────────────────────────────────
         step("reranking", "scoring relevance …")
-        docs = _rerank_docs(rag_query, docs)
-        docs = docs[:4]  # keep top-4 after re-ranking
+        docs = _rerank_docs(_rag_queries[0], docs)
+        docs = docs[:6]  # keep top-6 after re-ranking (multi-query fetched more)
 
         sources = list({d["metadata"]["source_url"] for d in docs})
         return {
@@ -507,8 +580,12 @@ class VisaWorkflow:
         if not config.PREPROCESS_DOCS or len(page["text"]) < 1500:
             return page
         try:
-            raw = page["text"][:5000]
-            cleaned = self.llm.chat(
+            raw = page["text"][:10000]
+            # Use the small/fast model for preprocessing so it doesn't compete
+            # with the big model's per-minute token quota.  Falls back to
+            # self.llm.chat() (which handles its own model chain) for providers
+            # that don't expose _model_override.
+            chat_kwargs: dict = dict(
                 messages=[
                     {"role": "system", "content": _PREPROCESS_SYSTEM},
                     {"role": "user", "content": f"Webpage from: {page['url']}\n\n{raw}"},
@@ -516,6 +593,15 @@ class VisaWorkflow:
                 temperature=0,
                 max_tokens=1500,
             )
+            # Resolve the small/fast model for the active provider so this
+            # works for both Groq and Gemini (and any future provider).
+            _fallback = getattr(
+                config, f"{config.LLM_PROVIDER.upper()}_FALLBACK_MODEL", None
+            )
+            try:
+                cleaned = self.llm.chat(**chat_kwargs, _model_override=_fallback)  # type: ignore[call-arg]
+            except TypeError:
+                cleaned = self.llm.chat(**chat_kwargs)
             if cleaned.strip() == "NOT_VISA_RELEVANT":
                 return page  # keep original; still indexed in case RAG finds use
             return {**page, "text": cleaned.strip()}
@@ -571,7 +657,7 @@ class VisaWorkflow:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _format_context(docs: list[dict], max_chars_per_doc: int = 1500) -> str:
+def _format_context(docs: list[dict], max_chars_per_doc: int = 2500) -> str:
     parts = []
     for i, doc in enumerate(docs, 1):
         meta = doc["metadata"]

@@ -34,7 +34,6 @@ try:
 except Exception:
     pass
 
-OFFICIAL_SOURCES: dict[str, list[str]] = _sources_data.get("official_sources", {})
 _CAPITALS: dict[str, str] = _sources_data.get("capitals", {})
 _DEST_LOCAL_TERMS: dict[str, str] = _sources_data.get("local_terms", {})
 
@@ -54,10 +53,10 @@ def search_topic(
     location = city.lower() if city else _CAPITALS.get(res, res)
 
     queries = [
-        f"{topic} {destination} visa {city or residence}".strip(),
         f"{destination} consulate {location} {topic}".strip(),
-        f"{topic} {nationality} {destination} visa official",
-        f"{destination} visa {topic} exact URL how to {nationality}",
+        f"{topic} {destination} visa {nationality} {city or residence} official".strip(),
+        f"{destination} {topic} {nationality} apply from {res} site:.gov OR site:.gouv OR site:.gob OR site:.gc.ca",
+        f"{destination} embassy {location} {topic} {nationality}".strip(),
     ]
 
     local = _DEST_LOCAL_TERMS.get(dest, "")
@@ -91,6 +90,14 @@ def search_visa_info(
     queries = list(extra_queries or []) + rule_queries
     search_hits = _run_search(queries, max_results, search_depth="advanced")
 
+    # Drop results with no mention of the destination in URL/title/snippet —
+    # these are noise that will confuse the LLM context.
+    dest_lower = destination.lower()
+    search_hits = [
+        h for h in search_hits
+        if dest_lower in (h.get("url", "") + h.get("title", "") + h.get("snippet", "")).lower()
+    ]
+
     # Re-sort: official first, then residence-relevant, then generic.
     # This ensures e.g. "Brazilian consulate in Bern" outranks
     # "how to apply Brazil visa from China".
@@ -100,11 +107,7 @@ def search_visa_info(
             reverse=True,
         )
 
-    # Prepend curated official sources so they are always scraped first
-    official_hits = _official_source_hits(destination)
-    seen = {h["url"] for h in official_hits}
-    deduped = [h for h in search_hits if h["url"] not in seen]
-    return official_hits + deduped
+    return search_hits
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,15 +124,6 @@ def _residence_score(hit: dict, residence: str, city: str = "") -> int:
     if residence.lower() in text:
         return 1
     return 0
-
-
-def _official_source_hits(destination: str) -> list[dict]:
-    """Return pre-defined official source stubs for a destination."""
-    urls = OFFICIAL_SOURCES.get(destination.lower(), [])
-    return [
-        {"url": url, "title": "", "snippet": "", "content": "", "official": True, "query": "official"}
-        for url in urls
-    ]
 
 
 def _run_search(queries: list[str], max_results: int, search_depth: str = "advanced") -> list[dict]:
@@ -227,52 +221,45 @@ def _build_queries(
     nat = nationality.lower()
     dest = destination.lower()
     res = residence.lower()
-    # City beats capital: if the user told us they live in Geneva, search Geneva
+    # City beats capital: if the user told us they live in Geneva, use Geneva
     location = city.lower() if city else _CAPITALS.get(res, "")
 
     queries = []
 
     if location:
-        # Primary: target the exact city — this is where the consulate is
+        # 1. Find the exact consulate / visa-centre page for this city
         queries += [
-            f"{dest} consulate {location} visa {nat}",
-            f"{dest} embassy {location} {nat} visa requirements",
-            f"apply {dest} visa {location} {nat} official",
+            f"{dest} consulate general {location} official website visa",
+            f"{dest} embassy {location} visa application {nat} how to apply",
         ]
-        # Procedure-specific: application portal, payment, documents, appointment
+        # 2. Step-by-step application procedure for this nationality + city
         queries += [
-            f"{dest} visa online application form {nat} {location}",
-            f"{dest} consulate {location} visa fee how to pay",
-            f"{dest} consulate {location} required documents checklist {nat}",
-            f"{dest} visa appointment booking {location}",
+            f"how to apply {dest} {purpose} visa {nat} passport {location} step by step",
+            f"{dest} visa {location} required documents checklist {nat} {purpose}",
+            f"{dest} visa fee {location} {nat} payment method amount",
+            f"{dest} visa appointment booking {location} {nat}",
         ]
 
     if res and res != location:
-        # Broad country-level fallback queries
+        # Country-level fallback (captures e.g. national consulate pages)
         queries += [
-            f"{dest} consulate {res} visa {nat} official",
-            f"{dest} embassy {res} visa application {nat}",
+            f"{dest} consulate {res} {nat} visa application official",
+            f"{dest} visa {nat} apply from {res} {purpose} documents fee",
         ]
 
-    # Always anchor general queries to the residence country.
-    # Without this, searches for e.g. "Chinese → Brazil" return results about
-    # applying from China rather than from the country of residence.
     if res:
+        # Anchor to residence so results are about applying *from* that country
         queries += [
-            f"visa requirements {nat} citizens apply {dest} from {res}",
-            f"{dest} visa {nat} from {res} {purpose} official",
-            f"{dest} immigration apply from {res} {nat} official",
-            f"{dest} visa application procedure {nat} living in {res} documents",
+            f"{dest} {purpose} visa application {nat} living in {res} procedure",
+            f"{dest} MFA consulate {res} {nat} visa",
         ]
     else:
         queries += [
-            f"visa requirements {nat} citizens {dest} official government",
-            f"{dest} visa {nat} entry requirements {purpose}",
-            f"{dest} immigration {nat} official",
-            f"{dest} visa application procedure {nat} documents upload submit",
+            f"{dest} visa {nat} {purpose} application procedure official government",
+            f"{dest} immigration {nat} required documents fee official",
         ]
 
-    # Local-language query: official consulate pages are often only in the
+    # Local-language query: official consulate pages are often in the
     # destination country's language and won't appear in English searches.
     local = _DEST_LOCAL_TERMS.get(dest, "")
     if local and location:

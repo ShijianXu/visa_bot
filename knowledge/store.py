@@ -15,7 +15,10 @@ from .models import VisaDocument
 _COLLECTION_NAME = "visa_docs"
 # Cosine distance threshold: 0 = identical, 2 = opposite.
 # Results above this value are too dissimilar to be useful.
-_DEFAULT_MAX_DISTANCE = 1.2
+# Cosine distance threshold: 0 = identical, 1 = orthogonal, 2 = opposite.
+# 0.75 keeps chunks that are at least moderately on-topic; above this the
+# content is too dissimilar to be useful context for the guide.
+_DEFAULT_MAX_DISTANCE = 0.75
 
 
 class KnowledgeStore:

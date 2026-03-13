@@ -5,6 +5,7 @@ description = "AI-powered CLI visa application assistant"
 requires-python = ">=3.11"
 dependencies = [
     "groq>=0.9.0",
+    "google-genai>=0.8.0,<1.0.0",
     "rich>=13.7.0",
     "requests>=2.31.0",
     "trafilatura>=1.8.0",

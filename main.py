@@ -13,6 +13,10 @@ Copy .env.example to .env and fill in your keys before running.
 """
 
 import sys
+import warnings
+
+# google-genai uses the built-in `any` as a Pydantic type annotation — suppress the noise.
+warnings.filterwarnings("ignore", message=".*<built-in function any>.*", category=UserWarning)
 
 
 def _check_env() -> None:
